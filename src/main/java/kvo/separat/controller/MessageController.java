@@ -1,7 +1,10 @@
-package kvo.separat;
+package kvo.separat.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kvo.separat.config.ConfigLoader;
+import kvo.separat.model.Message;
+import kvo.separat.repository.mysql.MessageRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,7 +46,7 @@ public class MessageController {
     public ResponseEntity<Optional<Message>> getMessageById(@PathVariable Long id) {
         try {
             Optional<Message> message = messageRepository.findById(id);
-            if (message != null) {
+            if (message.isPresent()) {
                 return ResponseEntity.ok(message);
             } else {
                 return ResponseEntity.notFound().build();
@@ -58,16 +61,20 @@ public class MessageController {
             @PathVariable Long id,
             @RequestBody MessageUpdateRequest request) throws IOException {
         Connection connectionMSSQL = null;
-        Statement statement = null;
-        StringBuilder pathFiles = new StringBuilder();
+//        Statement statement = null;
+//        StringBuilder pathFiles = new StringBuilder();
 
         String currentDir = System.getProperty("user.dir");
-        String configPath = currentDir + "\\src\\main\\java\\kvo\\separat\\config\\setting.txt";
+        String configPath = currentDir + "\\src\\main\\java\\kvo\\separat\\config\\setting.txt"; //TODO для ПРОДА скорректировать путь на \\config\\setting.txt
 //        String configPath = "C:\\Users\\KvochkinAY\\IdeaProjects\\Spring\\Project\\DVMessageSend\\src\\main\\java\\kvo\\separat\\config\\setting.txt";
         ConfigLoader configLoader = new ConfigLoader(configPath);
-        ConnectMSSQL connectMSSQL = new ConnectMSSQL(configLoader);
-        String uuid = "";
+        String URL = configLoader.getProperty("URL_MSSQL");
+        String USER = configLoader.getProperty("USER_MSSQL");
+        String PASSWORD = configLoader.getProperty("PASSWORD_MSSQL");
 
+//                ConnectMSSQL connectMSSQL;
+//        ConnectMSSQL.setFile_Path(configLoader.getProperty("FILE_PATH"));
+        String uuid = "";
             // найти UUID в сообщении
             Optional<Message> byId = messageRepository.findMessageById(id);
             if (byId.isPresent()) {
@@ -79,14 +86,11 @@ public class MessageController {
             } else {
                 System.out.println("Сообщение с id " + id + " не найдено");
             }
-//
             //TODO нужно передовать UUID
         try {
-            connectionMSSQL = DriverManager.getConnection(connectMSSQL.getURL(), connectMSSQL.getUSER(), connectMSSQL.getPASSWORD());
-            // 1. Начинаем транзакцию MSSQL
+            connectionMSSQL = DriverManager.getConnection(URL, USER, PASSWORD);
+            // 1. Обновляем temp_message в БД MSSQL
             connectionMSSQL.setAutoCommit(false);
-
-            // 2. Обновляем temp_message
             String updateSQL = "UPDATE [dbo].[temp_message] SET [status] = 'new' WHERE CAST([uuid] AS NVARCHAR(MAX)) = ?";
             try (PreparedStatement pstmt = connectionMSSQL.prepareStatement(updateSQL)) {
                 pstmt.setString(1, uuid);
@@ -97,11 +101,11 @@ public class MessageController {
                     throw new RuntimeException("Не найдено записей для обновления с UUID: " + uuid);
                 }
 
-                // 3. Если обновление прошло успешно - коммитим
+                // 2. Если обновление прошло успешно - коммитим
                 connectionMSSQL.commit();
                 System.out.println("MSSQL: успешно обновлено " + updatedRows + " строк");
 
-                // 4. Обновляем репозиторий (после коммита!)
+                // 3. Обновляем репозиторий (после коммита!) БД MySQL
                 messageRepository.updateMessage(
                         id,
                         request.getStatus(),

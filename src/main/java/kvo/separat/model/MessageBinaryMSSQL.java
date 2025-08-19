@@ -1,4 +1,4 @@
-package kvo.separat;
+package kvo.separat.model;
 
 import jakarta.persistence.*;
 import lombok.Data;

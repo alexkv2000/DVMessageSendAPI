@@ -1,4 +1,4 @@
-package kvo.separat;
+package kvo.separat.config;
 
 import java.io.BufferedReader;
 import java.io.FileReader;

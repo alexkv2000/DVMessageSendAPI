@@ -11,9 +11,15 @@ LIMIT_SELECT=100
 SERVER=doc-test_dev
 TYPE_MES=1912
 
+
+DRIVER_MYSQL=com.mysql.cj.jdbc.Driver
 DB_PATH=jdbc:mysql://doc-test:3306/sql-kafka
 USER_SQL=root
 PASSWORD_SQL=MySQLP@%%W)RD
+
+URL_MSSQL=jdbc:sqlserver://docprod\\sqlprod;databaseName=GAZ;encrypt=false;trustServerCertificate=true
+USER_MSSQL=DVSQL
+PASSWORD_MSSQL=DV_Cthdbc14@
 
 fetch.max.bytes=2147483647
 max.partition.fetch.bytes=2147483647
