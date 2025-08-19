@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kvo.separat.config.ConfigLoader;
 import kvo.separat.model.Message;
 import kvo.separat.repository.mysql.MessageRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +17,10 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/messages")
 public class MessageController {
+
+    @Value("${config.path}")
+    private String configPath; // Поле для хранения пути к конфигурации
+
     private final MessageRepository messageRepository;
 
     public MessageController(MessageRepository messageRepository) {
@@ -64,9 +69,11 @@ public class MessageController {
 //        Statement statement = null;
 //        StringBuilder pathFiles = new StringBuilder();
 
-        String currentDir = System.getProperty("user.dir");
-        String configPath = currentDir + "\\src\\main\\java\\kvo\\separat\\config\\setting.txt"; //TODO для ПРОДА скорректировать путь на \\config\\setting.txt
+//        String currentDir = System.getProperty("user.dir");
+//        String configPath ="C:\\projects\\config\\setting.txt";
+//        String configPath = currentDir + "\\src\\main\\java\\kvo\\separat\\config\\setting.txt"; //TODO для ПРОДА скорректировать путь на \\config\\setting.txt
 //        String configPath = "C:\\Users\\KvochkinAY\\IdeaProjects\\Spring\\Project\\DVMessageSend\\src\\main\\java\\kvo\\separat\\config\\setting.txt";
+        System.out.println("configPath = "+ configPath);
         ConfigLoader configLoader = new ConfigLoader(configPath);
         String URL = configLoader.getProperty("URL_MSSQL");
         String USER = configLoader.getProperty("USER_MSSQL");
