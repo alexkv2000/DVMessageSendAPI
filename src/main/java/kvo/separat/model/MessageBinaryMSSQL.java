@@ -12,7 +12,7 @@ public class MessageBinaryMSSQL {
     private Long id;
 
     @Column(name = "uuid", nullable = false, columnDefinition = "TEXT")
-    private String uuid; // Изменил с UUID на String
+    private String uuid;
 
     @Column(name = "namefiles", nullable = false, columnDefinition = "TEXT")
     private String namefiles;

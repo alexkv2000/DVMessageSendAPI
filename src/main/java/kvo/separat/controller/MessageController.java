@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kvo.separat.config.ConfigLoader;
 import kvo.separat.model.Message;
+import kvo.separat.model.MessageUpdateDto;
 import kvo.separat.repository.mysql.MessageRepository;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,8 +20,8 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/messages")
 public class MessageController {
-
-    @Value("${config.path}")
+    private static final Logger logger = LogManager.getLogger(MessageController.class);
+    @Value("${config.path:.\\config\\config.txt}")
     private String configPath; // Поле для хранения пути к конфигурации
 
     private final MessageRepository messageRepository;
@@ -64,13 +67,7 @@ public class MessageController {
     @PutMapping("/{id}")
     public ResponseEntity<Void> updateMessage(
             @PathVariable Long id,
-            @RequestBody MessageUpdateRequest request) throws IOException {
-        Connection connectionMSSQL = null;
-//        Statement statement = null;
-//        StringBuilder pathFiles = new StringBuilder();
-
-//        String currentDir = System.getProperty("user.dir");
-//        String configPath ="C:\\projects\\config\\setting.txt";
+            @RequestBody MessageUpdateDto request) throws IOException {
 //        String configPath = currentDir + "\\src\\main\\java\\kvo\\separat\\config\\setting.txt"; //TODO для ПРОДА скорректировать путь на \\config\\setting.txt
 //        String configPath = "C:\\Users\\KvochkinAY\\IdeaProjects\\Spring\\Project\\DVMessageSend\\src\\main\\java\\kvo\\separat\\config\\setting.txt";
         System.out.println("configPath = "+ configPath);
@@ -78,24 +75,18 @@ public class MessageController {
         String URL = configLoader.getProperty("URL_MSSQL");
         String USER = configLoader.getProperty("USER_MSSQL");
         String PASSWORD = configLoader.getProperty("PASSWORD_MSSQL");
+        // найти UUID в сообщении
+        String uuid = extractUuidFromMessage(id);
+        if (uuid == null) {
+            logger.error("Сообщение с id {} не найдено", id);
+            return ResponseEntity.notFound().build();
+        }
+        logger.info("UUID: {}", uuid);
+        return getVoidResponseEntity(id, request, URL, USER, PASSWORD, uuid);
+    }
 
-//                ConnectMSSQL connectMSSQL;
-//        ConnectMSSQL.setFile_Path(configLoader.getProperty("FILE_PATH"));
-        String uuid = "";
-            // найти UUID в сообщении
-            Optional<Message> byId = messageRepository.findMessageById(id);
-            if (byId.isPresent()) {
-                String messageJson = byId.get().getMessage();
-                ObjectMapper objectMapper = new ObjectMapper();// Парсинг JSON
-                JsonNode jsonNode = objectMapper.readTree(messageJson);
-                uuid = jsonNode.get("uuid").asText();// Извлечение uuid
-                System.out.println("UUID: " + uuid);
-            } else {
-                System.out.println("Сообщение с id " + id + " не найдено");
-            }
-            //TODO нужно передовать UUID
-        try {
-            connectionMSSQL = DriverManager.getConnection(URL, USER, PASSWORD);
+    private ResponseEntity<Void> getVoidResponseEntity(Long id, MessageUpdateDto request, String URL, String USER, String PASSWORD, String uuid) {
+        try (Connection connectionMSSQL = DriverManager.getConnection(URL, USER, PASSWORD)) {
             // 1. Обновляем temp_message в БД MSSQL
             connectionMSSQL.setAutoCommit(false);
             String updateSQL = "UPDATE [dbo].[temp_message] SET [status] = 'new' WHERE CAST([uuid] AS NVARCHAR(MAX)) = ?";
@@ -105,12 +96,12 @@ public class MessageController {
 
                 if (updatedRows == 0) {
                     connectionMSSQL.rollback();
-                    throw new RuntimeException("Не найдено записей для обновления с UUID: " + uuid);
+                    logger.info("Не найдено записей для обновления с UUID: {}", uuid);
+//                    return ResponseEntity.notFound().build(); //продолжаем отправку данных без Binary
                 }
-
                 // 2. Если обновление прошло успешно - коммитим
                 connectionMSSQL.commit();
-                System.out.println("MSSQL: успешно обновлено " + updatedRows + " строк");
+                logger.info("MSSQL: успешно обновлено {} строк.", updatedRows);
 
                 // 3. Обновляем репозиторий (после коммита!) БД MySQL
                 messageRepository.updateMessage(
@@ -120,68 +111,28 @@ public class MessageController {
                         request.getServer(),
                         request.getNumAttempt()
                 );
-                System.out.println("Repository: статус сообщения обновлен");
+                logger.info("Repository: статус сообщения {} обновлен, кол-во вложенных файлов {}", uuid, updatedRows);
+                return ResponseEntity.ok().build();
             }
         } catch (Exception e) {
-            if (connectionMSSQL != null) {
-                try {
-                    connectionMSSQL.rollback();
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
-            throw new RuntimeException("Ошибка при обновлении статуса", e);
-        } finally {
-            // Закрытие соединения
-            if (connectionMSSQL != null) {
-                try {
-                    connectionMSSQL.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    public String extractUuidFromMessage(Long id) {
+        Optional<Message> message = messageRepository.findMessageById(id);
+        if (message.isPresent()) {
+            String messageJson = message.get().getMessage();
+            try {
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode jsonNode = objectMapper.readTree(messageJson);
+                return jsonNode.get("uuid").asText();
+            } catch (IOException | NullPointerException e) {
+                logger.error("Ошибка при извлечении UUID из сообщения с id: {}", id, e);
+                return null;
             }
         }
-//            return updated ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
-        return ResponseEntity.internalServerError().build();
-    }
-}
-
-class MessageUpdateRequest {
-    private String status;
-    private Timestamp dateEnd;
-    private String server;
-    private int numAttempt;
-
-    // Getters and setters
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Timestamp getDateEnd() {
-        return dateEnd;
-    }
-
-    public void setDateEnd(Timestamp dateEnd) {
-        this.dateEnd = dateEnd;
-    }
-
-    public String getServer() {
-        return server;
-    }
-
-    public void setServer(String server) {
-        this.server = server;
-    }
-
-    public int getNumAttempt() {
-        return numAttempt;
-    }
-
-    public void setNumAttempt(int numAttempt) {
-        this.numAttempt = numAttempt;
+        return null;
     }
 }

@@ -5,7 +5,7 @@ spring:
     mysql:
       url: jdbc:mysql://doc-test:3306/sql-kafka
       username: root
-      password: MySQLP@%%W)RD
+      password: G@{MsEmeXl~Gsu8~{Kcv
       driver-class-name: com.mysql.cj.jdbc.Driver
 #    mssql:
 #      url: jdbc:sqlserver://DOCPROD\SQLPROD:1433;databaseName=GAZ;encrypt=false
